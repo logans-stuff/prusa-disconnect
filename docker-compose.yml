@@ -1,0 +1,8 @@
+services:
+  prusa-disconnect:
+    build: .
+    container_name: prusa-disconnect
+    network_mode: host
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
