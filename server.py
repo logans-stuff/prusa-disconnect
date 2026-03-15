@@ -88,11 +88,12 @@ def init_db():
             FOREIGN KEY (gcode_id) REFERENCES gcodes(id)
         );
     """)
-    # Add camera_url column if missing (upgrade path)
-    try:
-        conn.execute("SELECT camera_url FROM printers LIMIT 1")
-    except sqlite3.OperationalError:
-        conn.execute("ALTER TABLE printers ADD COLUMN camera_url TEXT DEFAULT ''")
+    # Add columns if missing (upgrade path)
+    for col, default in [("camera_url", "''"), ("discord_webhook", "''")]:
+        try:
+            conn.execute(f"SELECT {col} FROM printers LIMIT 1")
+        except sqlite3.OperationalError:
+            conn.execute(f"ALTER TABLE printers ADD COLUMN {col} TEXT DEFAULT {default}")
     conn.commit()
     conn.close()
 
@@ -228,6 +229,10 @@ telemetry_store: dict[str, dict] = {}
 camera_store: dict[str, bytes] = {}  # latest snapshot per printer
 printer_clients: dict[str, PrusaLinkClient] = {}
 printer_camera_urls: dict[str, str] = {}  # external camera URLs
+printer_webhooks: dict[str, str] = {}  # discord webhook URLs per printer
+printer_names: dict[str, str] = {}  # printer names for notifications
+discord_last_progress: dict[str, int] = {}  # last notified 5% bracket per printer
+discord_last_state: dict[str, str] = {}  # last notified state per printer
 ws_clients: list[WebSocket] = []
 
 async def broadcast_telemetry():
@@ -289,6 +294,127 @@ async def poll_camera(printer_id: str, client: PrusaLinkClient):
     except Exception:
         pass
 
+async def send_discord_notification(printer_id: str, printer_name: str,
+                                     webhook_url: str, title: str,
+                                     description: str, color: int,
+                                     fields: list = None):
+    """Send a Discord webhook embed, optionally with a camera snapshot."""
+    embed = {
+        "title": title,
+        "description": description,
+        "color": color,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "footer": {"text": f"PrusaDisconnect \u2022 {printer_name}"},
+    }
+    if fields:
+        embed["fields"] = fields
+
+    snap = camera_store.get(printer_id)
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as c:
+            if snap:
+                # Multipart: embed JSON + image file
+                embed["image"] = {"url": "attachment://snapshot.jpg"}
+                payload = {"payload_json": json.dumps({"embeds": [embed]})}
+                ext = "jpg" if snap[:2] == b'\xff\xd8' else "png"
+                ct = "image/jpeg" if ext == "jpg" else "image/png"
+                files = {"file": (f"snapshot.{ext}", snap, ct)}
+                await c.post(webhook_url, data=payload, files=files)
+            else:
+                await c.post(webhook_url, json={"embeds": [embed]})
+    except Exception:
+        pass  # Don't let webhook failures break polling
+
+async def check_discord_notifications(printer_id: str):
+    """Check if we need to send a Discord notification for this printer."""
+    webhook = printer_webhooks.get(printer_id, "")
+    if not webhook:
+        return
+    name = printer_names.get(printer_id, printer_id)
+    t = telemetry_store.get(printer_id, {})
+    if not t.get("online"):
+        return
+
+    state = (t.get("status", {}).get("printer", {}).get("state", "")).lower()
+    job = t.get("job") or {}
+    progress = job.get("progress", 0)
+    file_name = (job.get("file", {}) or {}).get("display_name") or (job.get("file", {}) or {}).get("name", "")
+    time_remaining = job.get("time_remaining")
+    time_printing = job.get("time_printing")
+
+    prev_state = discord_last_state.get(printer_id, "")
+
+    # Print started
+    if state == "printing" and prev_state not in ("printing", "paused"):
+        discord_last_progress[printer_id] = 0
+        discord_last_state[printer_id] = state
+        await send_discord_notification(
+            printer_id, name, webhook,
+            "\U0001F7E2 Print Started",
+            f"**{file_name}**" if file_name else "New print job started",
+            0x4ade80,  # green
+        )
+        return
+
+    # Print finished
+    if state in ("finished", "idle", "ready") and prev_state == "printing":
+        discord_last_state[printer_id] = state
+        discord_last_progress.pop(printer_id, None)
+        fields = []
+        if time_printing:
+            h = int(time_printing) // 3600
+            m = (int(time_printing) % 3600) // 60
+            fields.append({"name": "Print Time", "value": f"{h}h {m}m", "inline": True})
+        await send_discord_notification(
+            printer_id, name, webhook,
+            "\u2705 Print Complete",
+            f"**{file_name}**" if file_name else "Print job finished",
+            0x4ade80,  # green
+            fields=fields,
+        )
+        return
+
+    # Print failed / error
+    if state in ("error", "attention") and prev_state != state:
+        discord_last_state[printer_id] = state
+        await send_discord_notification(
+            printer_id, name, webhook,
+            "\u26A0\uFE0F Printer Error",
+            f"Printer entered **{state}** state" + (f"\nFile: **{file_name}**" if file_name else ""),
+            0xf87171,  # red
+        )
+        return
+
+    discord_last_state[printer_id] = state
+
+    # Progress update every 5%
+    if state == "printing" and progress > 0:
+        current_bracket = int(progress // 5) * 5
+        last_bracket = discord_last_progress.get(printer_id, 0)
+        if current_bracket > last_bracket:
+            discord_last_progress[printer_id] = current_bracket
+            fields = [
+                {"name": "Progress", "value": f"{progress:.1f}%", "inline": True},
+            ]
+            if time_remaining:
+                h = int(time_remaining) // 3600
+                m = (int(time_remaining) % 3600) // 60
+                fields.append({"name": "Remaining", "value": f"{h}h {m}m", "inline": True})
+            if time_printing:
+                h = int(time_printing) // 3600
+                m = (int(time_printing) % 3600) // 60
+                fields.append({"name": "Elapsed", "value": f"{h}h {m}m", "inline": True})
+            # Progress bar visual
+            filled = int(current_bracket / 5)
+            bar = "\u2588" * filled + "\u2591" * (20 - filled)
+            await send_discord_notification(
+                printer_id, name, webhook,
+                f"\U0001F5A8\uFE0F Printing \u2014 {current_bracket}%",
+                f"**{file_name}**\n`{bar}` {progress:.1f}%" if file_name else f"`{bar}` {progress:.1f}%",
+                0xe8793a,  # accent orange
+                fields=fields,
+            )
+
 _poll_counter = 0
 
 async def polling_loop():
@@ -304,6 +430,9 @@ async def polling_loop():
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
             await broadcast_telemetry()
+            # Check Discord notifications after telemetry is updated
+            for pid in list(printer_clients.keys()):
+                await check_discord_notifications(pid)
         # Process print queue
         await process_queue()
         _poll_counter += 1
@@ -371,6 +500,9 @@ async def lifespan(app: FastAPI):
         )
         if row["camera_url"]:
             printer_camera_urls[pid] = row["camera_url"]
+        if row["discord_webhook"]:
+            printer_webhooks[pid] = row["discord_webhook"]
+        printer_names[pid] = row["name"]
     conn.close()
     task = asyncio.create_task(polling_loop())
     yield
@@ -390,6 +522,7 @@ class PrinterAdd(BaseModel):
     password: str = ""
     api_key: str = ""
     camera_url: str = ""
+    discord_webhook: str = ""
 
 class PrinterUpdate(BaseModel):
     name: Optional[str] = None
@@ -398,6 +531,7 @@ class PrinterUpdate(BaseModel):
     password: Optional[str] = None
     api_key: Optional[str] = None
     camera_url: Optional[str] = None
+    discord_webhook: Optional[str] = None
     enabled: Optional[bool] = None
 
 class QueueAdd(BaseModel):
@@ -440,15 +574,19 @@ async def add_printer(body: PrinterAdd):
 
     conn = get_db()
     conn.execute(
-        "INSERT INTO printers (id, name, host, api_key, username, password, printer_type, camera_url, added_at) VALUES (?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO printers (id, name, host, api_key, username, password, printer_type, camera_url, discord_webhook, added_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
         (pid, body.name, body.host, body.api_key, body.username, body.password,
-         version.get("text", ""), body.camera_url, datetime.now(timezone.utc).isoformat())
+         version.get("text", ""), body.camera_url, body.discord_webhook,
+         datetime.now(timezone.utc).isoformat())
     )
     conn.commit()
     conn.close()
     printer_clients[pid] = client
+    printer_names[pid] = body.name
     if body.camera_url:
         printer_camera_urls[pid] = body.camera_url
+    if body.discord_webhook:
+        printer_webhooks[pid] = body.discord_webhook
     return {"id": pid, "version": version}
 
 @app.put("/api/printers/{printer_id}")
@@ -471,10 +609,15 @@ async def update_printer(printer_id: str, body: PrinterUpdate):
             host=row["host"], username=row["username"],
             password=row["password"], api_key=row["api_key"]
         )
+        printer_names[printer_id] = row["name"]
         if row["camera_url"]:
             printer_camera_urls[printer_id] = row["camera_url"]
         else:
             printer_camera_urls.pop(printer_id, None)
+        if row["discord_webhook"]:
+            printer_webhooks[printer_id] = row["discord_webhook"]
+        else:
+            printer_webhooks.pop(printer_id, None)
     else:
         printer_clients.pop(printer_id, None)
     return {"ok": True}
@@ -490,6 +633,10 @@ async def delete_printer(printer_id: str):
     telemetry_store.pop(printer_id, None)
     camera_store.pop(printer_id, None)
     printer_camera_urls.pop(printer_id, None)
+    printer_webhooks.pop(printer_id, None)
+    printer_names.pop(printer_id, None)
+    discord_last_progress.pop(printer_id, None)
+    discord_last_state.pop(printer_id, None)
     return {"ok": True}
 
 # ---------------------------------------------------------------------------
@@ -784,6 +931,94 @@ async def print_history(printer_id: Optional[str] = None, limit: int = 50):
             "SELECT h.*, p.name as printer_name FROM print_history h JOIN printers p ON h.printer_id = p.id ORDER BY h.started_at DESC LIMIT ?",
             (limit,)
         ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+# ---------------------------------------------------------------------------
+# API: Printer metrics
+# ---------------------------------------------------------------------------
+@app.get("/api/printers/{printer_id}/metrics")
+async def printer_metrics(printer_id: str):
+    conn = get_db()
+    row = conn.execute("SELECT name FROM printers WHERE id = ?", (printer_id,)).fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(404, "Printer not found")
+    total = conn.execute(
+        "SELECT COUNT(*) as cnt FROM print_history WHERE printer_id = ?", (printer_id,)
+    ).fetchone()["cnt"]
+    total_time = conn.execute(
+        "SELECT COALESCE(SUM(time_printing), 0) as t FROM print_history WHERE printer_id = ?", (printer_id,)
+    ).fetchone()["t"]
+    completed = conn.execute(
+        "SELECT COUNT(*) as cnt FROM print_history WHERE printer_id = ? AND status IN ('FINISHED', 'COMPLETED')",
+        (printer_id,)
+    ).fetchone()["cnt"]
+    failed = conn.execute(
+        "SELECT COUNT(*) as cnt FROM print_history WHERE printer_id = ? AND status IN ('ERROR', 'FAILED', 'STOPPED')",
+        (printer_id,)
+    ).fetchone()["cnt"]
+    last_print = conn.execute(
+        "SELECT file_name, started_at, status FROM print_history WHERE printer_id = ? ORDER BY started_at DESC LIMIT 1",
+        (printer_id,)
+    ).fetchone()
+    conn.close()
+    return {
+        "printer_id": printer_id,
+        "printer_name": row["name"],
+        "total_prints": total,
+        "completed": completed,
+        "failed": failed,
+        "success_rate": round(completed / total * 100, 1) if total > 0 else 0,
+        "total_print_time_s": total_time,
+        "last_print": dict(last_print) if last_print else None,
+    }
+
+@app.get("/api/metrics")
+async def all_metrics():
+    conn = get_db()
+    printers = conn.execute("SELECT id, name FROM printers ORDER BY name").fetchall()
+    results = []
+    for p in printers:
+        pid = p["id"]
+        total = conn.execute(
+            "SELECT COUNT(*) as cnt FROM print_history WHERE printer_id = ?", (pid,)
+        ).fetchone()["cnt"]
+        total_time = conn.execute(
+            "SELECT COALESCE(SUM(time_printing), 0) as t FROM print_history WHERE printer_id = ?", (pid,)
+        ).fetchone()["t"]
+        completed = conn.execute(
+            "SELECT COUNT(*) as cnt FROM print_history WHERE printer_id = ? AND status IN ('FINISHED', 'COMPLETED')",
+            (pid,)
+        ).fetchone()["cnt"]
+        failed = conn.execute(
+            "SELECT COUNT(*) as cnt FROM print_history WHERE printer_id = ? AND status IN ('ERROR', 'FAILED', 'STOPPED')",
+            (pid,)
+        ).fetchone()["cnt"]
+        results.append({
+            "printer_id": pid,
+            "printer_name": p["name"],
+            "total_prints": total,
+            "completed": completed,
+            "failed": failed,
+            "success_rate": round(completed / total * 100, 1) if total > 0 else 0,
+            "total_print_time_s": total_time,
+        })
+    conn.close()
+    return results
+
+@app.get("/api/printers/{printer_id}/metrics/history")
+async def printer_metrics_history(printer_id: str, days: int = Query(30)):
+    """Return daily print counts and print time for charting."""
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT DATE(started_at) as day, COUNT(*) as prints, "
+        "COALESCE(SUM(time_printing), 0) as print_time, "
+        "SUM(CASE WHEN status IN ('FINISHED','COMPLETED') THEN 1 ELSE 0 END) as completed "
+        "FROM print_history WHERE printer_id = ? AND started_at >= DATE('now', ?) "
+        "GROUP BY DATE(started_at) ORDER BY day",
+        (printer_id, f"-{days} days")
+    ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
 
