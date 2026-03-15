@@ -889,6 +889,19 @@ async function printerAction(printerId, action, jobId) {
   await fetch(url, {method});
 }
 
+async function continueQueue(printerId) {
+  try {
+    const r = await fetch(`${API}/api/queue/continue/${printerId}`, {method: 'POST'});
+    if (!r.ok) {
+      const e = await r.json();
+      alert(e.detail || 'Failed to continue queue');
+    }
+    await fetchQueue();
+  } catch(e) {
+    alert(e.message);
+  }
+}
+
 // ── Files API ──
 async function fetchGcodes() {
   try {
@@ -1120,6 +1133,9 @@ function renderPrinters() {
           ${state === 'paused' && jobId ? `
             <button class="btn btn-sm btn-accent" onclick="printerAction('${pid}','resume',${jobId})">${ICONS.play} Resume</button>
             <button class="btn btn-sm btn-danger" onclick="printerAction('${pid}','stop',${jobId})">${ICONS.stop} Stop</button>
+          ` : ''}
+          ${['stopped','finished','idle','ready'].includes(state) && queue.some(q => q.printer_id === pid && q.status === 'queued') ? `
+            <button class="btn btn-sm btn-accent" onclick="continueQueue('${pid}')">${ICONS.play} Continue Queue</button>
           ` : ''}
           <span class="spacer"></span>
           <button class="btn btn-sm btn-ghost" onclick="deletePrinter('${pid}')">${ICONS.trash}</button>
@@ -1492,6 +1508,7 @@ document.querySelectorAll('.topbar-nav button').forEach(btn => {
 // INIT
 // ═══════════════════════════════════════════════════════════════════
 fetchPrinters();
+fetchQueue();
 connectWS();
 setInterval(fetchPrinters, 30000);
 </script>
