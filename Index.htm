@@ -1,0 +1,1203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PrusaDisconnect</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=IBM+Plex+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════════════════════════
+   DESIGN SYSTEM — Industrial Operational Dashboard
+   Pattern: Real-Time Monitoring + Data-Dense Dashboard
+   Style: Dark industrial with warm accent system
+   Typography: DM Sans / IBM Plex Mono
+   ═══════════════════════════════════════════════════════════════════ */
+
+:root {
+  --bg-0: #08090a;
+  --bg-1: #0e1012;
+  --bg-2: #151719;
+  --bg-3: #1c1e22;
+  --bg-4: #24272b;
+  --border-0: #ffffff08;
+  --border-1: #ffffff0f;
+  --border-2: #ffffff18;
+  --border-3: #ffffff25;
+
+  --text-0: #f0eeeb;
+  --text-1: #b8b5af;
+  --text-2: #807d77;
+  --text-3: #555350;
+
+  --accent: #e8793a;
+  --accent-soft: #e8793a18;
+  --accent-med: #e8793a30;
+  --accent-glow: #e8793a08;
+
+  --green: #4ade80;
+  --green-soft: #4ade8015;
+  --green-med: #4ade8030;
+  --red: #f87171;
+  --red-soft: #f8717115;
+  --red-med: #f8717130;
+  --yellow: #fbbf24;
+  --yellow-soft: #fbbf2415;
+  --yellow-med: #fbbf2430;
+  --blue: #60a5fa;
+  --blue-soft: #60a5fa15;
+
+  --sans: 'DM Sans', -apple-system, sans-serif;
+  --mono: 'IBM Plex Mono', 'SF Mono', monospace;
+  --radius-sm: 4px;
+  --radius: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --duration: 220ms;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html { font-size: 15px; }
+body {
+  font-family: var(--sans);
+  background: var(--bg-0);
+  color: var(--text-0);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: var(--border-3); }
+
+/* ── Utility ── */
+.mono { font-family: var(--mono); }
+.truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ═══════════════════════════════════════════════════════════════════
+   TOPBAR
+   ═══════════════════════════════════════════════════════════════════ */
+.topbar {
+  height: 52px;
+  background: var(--bg-1);
+  border-bottom: 1px solid var(--border-1);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  backdrop-filter: blur(12px);
+}
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: -0.02em;
+  color: var(--text-0);
+  text-decoration: none;
+}
+.brand-mark {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  background: linear-gradient(135deg, var(--accent), #d4612a);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: #000;
+  flex-shrink: 0;
+}
+.brand em {
+  font-style: normal;
+  color: var(--accent);
+}
+.topbar-sep {
+  width: 1px;
+  height: 20px;
+  background: var(--border-2);
+}
+.topbar-nav {
+  display: flex;
+  gap: 2px;
+}
+.topbar-nav button {
+  background: none;
+  border: none;
+  color: var(--text-2);
+  font-family: var(--sans);
+  font-size: 12.5px;
+  font-weight: 500;
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--duration) var(--ease);
+  letter-spacing: 0.01em;
+}
+.topbar-nav button:hover { color: var(--text-1); background: var(--border-0); }
+.topbar-nav button.active {
+  color: var(--text-0);
+  background: var(--bg-3);
+}
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.ws-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-3);
+  letter-spacing: 0.02em;
+}
+.ws-indicator .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--red);
+  transition: background var(--duration) var(--ease);
+  flex-shrink: 0;
+}
+.ws-indicator .dot.connected {
+  background: var(--green);
+  box-shadow: 0 0 6px var(--green-soft);
+}
+.printer-count-badge {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--text-2);
+  background: var(--bg-3);
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  letter-spacing: 0.03em;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   MAIN CONTENT
+   ═══════════════════════════════════════════════════════════════════ */
+.main {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 20px;
+}
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
+/* ── Section Header ── */
+.section-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+.section-title {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.section-title .count {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--text-2);
+  background: var(--bg-3);
+  padding: 2px 7px;
+  border-radius: var(--radius-sm);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   BUTTONS
+   ═══════════════════════════════════════════════════════════════════ */
+.btn {
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 7px 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-2);
+  background: var(--bg-3);
+  color: var(--text-1);
+  cursor: pointer;
+  transition: all var(--duration) var(--ease);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  letter-spacing: 0.01em;
+  line-height: 1;
+}
+.btn:hover { background: var(--bg-4); border-color: var(--border-3); color: var(--text-0); }
+.btn-accent {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #000;
+  font-weight: 600;
+}
+.btn-accent:hover {
+  background: #d4682e;
+  border-color: #d4682e;
+  color: #000;
+}
+.btn-ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--text-2);
+  padding: 5px 8px;
+}
+.btn-ghost:hover {
+  background: var(--border-0);
+  color: var(--text-1);
+}
+.btn-danger {
+  border-color: var(--red-med);
+  color: var(--red);
+  background: var(--red-soft);
+}
+.btn-danger:hover {
+  background: var(--red-med);
+}
+.btn-sm {
+  font-size: 11px;
+  padding: 4px 9px;
+  border-radius: var(--radius-sm);
+}
+.btn svg { width: 14px; height: 14px; flex-shrink: 0; }
+
+/* ═══════════════════════════════════════════════════════════════════
+   PRINTER GRID
+   ═══════════════════════════════════════════════════════════════════ */
+.printer-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 12px;
+}
+
+/* ── Printer Card ── */
+.p-card {
+  background: var(--bg-1);
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  transition: border-color var(--duration) var(--ease), box-shadow var(--duration) var(--ease);
+  position: relative;
+}
+.p-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0;
+  width: 3px;
+  height: 100%;
+  border-radius: 3px 0 0 3px;
+  transition: background var(--duration) var(--ease);
+}
+.p-card:hover { border-color: var(--border-2); }
+.p-card.s-printing::before { background: var(--accent); }
+.p-card.s-idle::before, .p-card.s-ready::before, .p-card.s-finished::before { background: var(--green); }
+.p-card.s-paused::before { background: var(--yellow); }
+.p-card.s-error::before, .p-card.s-attention::before, .p-card.s-offline::before { background: var(--red); }
+.p-card.s-busy::before { background: var(--blue); }
+.p-card.s-offline { opacity: 0.6; }
+
+/* Card Header */
+.p-head {
+  padding: 14px 16px 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+.p-name {
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+}
+.p-host {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--text-3);
+  margin-top: 2px;
+}
+.p-badge {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 500;
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.badge-printing { background: var(--accent-soft); color: var(--accent); }
+.badge-idle, .badge-ready { background: var(--green-soft); color: var(--green); }
+.badge-paused { background: var(--yellow-soft); color: var(--yellow); }
+.badge-error, .badge-attention, .badge-offline { background: var(--red-soft); color: var(--red); }
+.badge-busy { background: var(--blue-soft); color: var(--blue); }
+.badge-finished { background: var(--green-soft); color: var(--green); }
+
+/* Telemetry Body */
+.p-body { padding: 0 16px 14px; }
+
+/* Temperature Row */
+.temps-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.temp-pill {
+  background: var(--bg-2);
+  border: 1px solid var(--border-0);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.temp-pill .label {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  font-weight: 500;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.temp-pill .reading {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.temp-pill .val {
+  font-family: var(--mono);
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+.temp-pill .target {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--text-3);
+}
+
+/* Progress */
+.progress-block { margin-bottom: 12px; }
+.progress-track {
+  height: 4px;
+  background: var(--bg-3);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+.progress-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width 1.5s var(--ease);
+  position: relative;
+}
+.progress-fill::after {
+  content: '';
+  position: absolute;
+  top: 0; right: 0;
+  width: 40px;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15));
+  animation: shimmer 2s ease-in-out infinite;
+}
+@keyframes shimmer {
+  0%, 100% { opacity: 0; }
+  50% { opacity: 1; }
+}
+.progress-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-2);
+}
+.progress-pct {
+  font-weight: 600;
+  color: var(--accent);
+  font-size: 12px;
+}
+
+/* File display */
+.file-tag {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-2);
+  background: var(--bg-2);
+  padding: 5px 10px;
+  border-radius: var(--radius-sm);
+  margin-bottom: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border-0);
+}
+.file-tag svg { width: 12px; height: 12px; flex-shrink: 0; color: var(--text-3); }
+
+/* Card Actions */
+.p-actions {
+  display: flex;
+  gap: 6px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--border-0);
+  align-items: center;
+}
+.p-actions .spacer { flex: 1; }
+.p-actions .error-text {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 200px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   EMPTY STATE
+   ═══════════════════════════════════════════════════════════════════ */
+.empty-state {
+  text-align: center;
+  padding: 80px 24px;
+  display: none;
+}
+.empty-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-lg);
+  background: var(--bg-2);
+  border: 1px solid var(--border-1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+.empty-icon svg { width: 24px; height: 24px; color: var(--text-3); }
+.empty-state h3 {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 6px;
+  letter-spacing: -0.01em;
+}
+.empty-state p {
+  font-size: 13px;
+  color: var(--text-2);
+  line-height: 1.6;
+  max-width: 340px;
+  margin: 0 auto 20px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   MODAL
+   ═══════════════════════════════════════════════════════════════════ */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(4px);
+  display: none;
+  place-items: center;
+  z-index: 300;
+  opacity: 0;
+  transition: opacity var(--duration) var(--ease);
+}
+.modal-backdrop.show {
+  display: grid;
+  opacity: 1;
+}
+.modal-box {
+  background: var(--bg-1);
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius-xl);
+  padding: 28px;
+  width: 92%;
+  max-width: 440px;
+  transform: translateY(8px);
+  transition: transform var(--duration) var(--ease);
+}
+.modal-backdrop.show .modal-box {
+  transform: translateY(0);
+}
+.modal-box h2 {
+  font-size: 17px;
+  font-weight: 600;
+  margin-bottom: 20px;
+  letter-spacing: -0.015em;
+}
+.field {
+  margin-bottom: 16px;
+}
+.field label {
+  display: block;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--text-2);
+  margin-bottom: 5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.field input {
+  width: 100%;
+  background: var(--bg-2);
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius);
+  padding: 9px 12px;
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--text-0);
+  outline: none;
+  transition: border-color var(--duration) var(--ease);
+}
+.field input:focus { border-color: var(--accent); }
+.field input::placeholder { color: var(--text-3); }
+.field .hint {
+  font-size: 10.5px;
+  color: var(--text-3);
+  margin-top: 4px;
+  line-height: 1.4;
+}
+.modal-error {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--red);
+  padding: 8px 10px;
+  background: var(--red-soft);
+  border-radius: var(--radius-sm);
+  margin-top: 12px;
+  display: none;
+}
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 22px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   HISTORY TABLE
+   ═══════════════════════════════════════════════════════════════════ */
+.table-wrap {
+  background: var(--bg-1);
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+.hist-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+.hist-table th {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-3);
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border-1);
+  background: var(--bg-2);
+}
+.hist-table td {
+  padding: 11px 16px;
+  border-bottom: 1px solid var(--border-0);
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-1);
+}
+.hist-table tr:last-child td { border-bottom: none; }
+.hist-table tr:hover td { background: var(--bg-2); }
+
+/* ═══════════════════════════════════════════════════════════════════
+   SETTINGS
+   ═══════════════════════════════════════════════════════════════════ */
+.settings-card {
+  background: var(--bg-1);
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  margin-bottom: 12px;
+}
+.settings-card h3 {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 14px;
+  letter-spacing: -0.01em;
+}
+.settings-card .meta-row {
+  font-size: 12.5px;
+  color: var(--text-2);
+  line-height: 1.8;
+}
+.settings-card .meta-row strong {
+  color: var(--text-1);
+  font-weight: 500;
+}
+.settings-card .meta-row code {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-2);
+  padding: 2px 6px;
+  border-radius: 3px;
+  color: var(--text-1);
+}
+.settings-printer-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border-0);
+}
+.settings-printer-row:last-child { border-bottom: none; }
+.settings-printer-name { font-weight: 500; font-size: 13px; }
+.settings-printer-host {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--text-3);
+  margin-top: 1px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   CAMERA SNAPSHOT (inside card)
+   ═══════════════════════════════════════════════════════════════════ */
+.cam-frame {
+  margin: 0 16px 12px;
+  background: var(--bg-0);
+  border-radius: var(--radius);
+  border: 1px solid var(--border-0);
+  overflow: hidden;
+  position: relative;
+  aspect-ratio: 16/10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.cam-frame img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.cam-frame .no-cam {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.cam-live-dot {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 6px;
+  height: 6px;
+  background: var(--red);
+  border-radius: 50%;
+  animation: blink 1.5s ease-in-out infinite;
+}
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+/* ═══════════════════════════════════════════════════════════════════
+   RESPONSIVE
+   ═══════════════════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+  .topbar { padding: 0 14px; }
+  .topbar-sep { display: none; }
+  .main { padding: 14px; }
+  .printer-grid { grid-template-columns: 1fr; }
+  .section-bar { flex-direction: column; gap: 10px; align-items: flex-start; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   ANIMATIONS
+   ═══════════════════════════════════════════════════════════════════ */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.fade-up {
+  animation: fadeUp 0.35s var(--ease) both;
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════ TOPBAR ═══════════════════════ -->
+<div class="topbar">
+  <div class="topbar-left">
+    <a class="brand" href="/">
+      <div class="brand-mark">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+      </div>
+      Prusa<em>Disconnect</em>
+    </a>
+    <div class="topbar-sep"></div>
+    <nav class="topbar-nav">
+      <button class="active" data-tab="dashboard">Dashboard</button>
+      <button data-tab="history">History</button>
+      <button data-tab="settings">Settings</button>
+    </nav>
+  </div>
+  <div class="topbar-right">
+    <span class="printer-count-badge" id="printerCountHeader">0 printers</span>
+    <div class="ws-indicator">
+      <div class="dot" id="wsDot"></div>
+      <span id="wsLabel">connecting</span>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ MAIN ═══════════════════════ -->
+<div class="main">
+
+  <!-- DASHBOARD -->
+  <div id="tab-dashboard" class="tab-content active">
+    <div class="section-bar">
+      <div class="section-title">
+        Printers
+        <span class="count" id="printerCount">0</span>
+      </div>
+      <button class="btn btn-accent" onclick="showAddPrinter()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Add printer
+      </button>
+    </div>
+    <div id="printerGrid" class="printer-grid"></div>
+    <div id="emptyState" class="empty-state">
+      <div class="empty-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="7" width="20" height="14" rx="2"/>
+          <path d="M16 7V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v3"/>
+          <line x1="12" y1="12" x2="12" y2="16"/>
+          <line x1="10" y1="14" x2="14" y2="14"/>
+        </svg>
+      </div>
+      <h3>No printers yet</h3>
+      <p>Connect a Prusa printer on your local network. You'll need its IP address and PrusaLink credentials.</p>
+      <button class="btn btn-accent" onclick="showAddPrinter()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Add printer
+      </button>
+    </div>
+  </div>
+
+  <!-- HISTORY -->
+  <div id="tab-history" class="tab-content">
+    <div class="section-bar">
+      <div class="section-title">Print history</div>
+    </div>
+    <div class="table-wrap">
+      <table class="hist-table">
+        <thead>
+          <tr>
+            <th>Printer</th>
+            <th>File</th>
+            <th>Started</th>
+            <th>Status</th>
+            <th>Duration</th>
+          </tr>
+        </thead>
+        <tbody id="historyBody">
+          <tr><td colspan="5" style="text-align:center;color:var(--text-3);padding:40px">Loading...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- SETTINGS -->
+  <div id="tab-settings" class="tab-content">
+    <div class="section-bar">
+      <div class="section-title">Settings</div>
+    </div>
+    <div class="settings-card">
+      <h3>About PrusaDisconnect</h3>
+      <div class="meta-row">
+        Self-hosted Prusa Connect alternative. Talks directly to your printers via PrusaLink's local REST API.
+        No cloud, no internet required.
+      </div>
+      <div class="meta-row" style="margin-top:12px">
+        <strong>Version</strong> <code>0.1.0</code> &nbsp;&nbsp;
+        <strong>API</strong> <code>PrusaLink v1</code> &nbsp;&nbsp;
+        <strong>Polling</strong> <code>3s</code>
+      </div>
+    </div>
+    <div class="settings-card">
+      <h3>Registered printers</h3>
+      <div id="settingsPrinters">
+        <div style="color:var(--text-3);font-size:12.5px">No printers registered.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ ADD PRINTER MODAL ═══════════════════════ -->
+<div class="modal-backdrop" id="addModal">
+  <div class="modal-box">
+    <h2>Add printer</h2>
+    <div class="field">
+      <label>Name</label>
+      <input id="pName" placeholder="MK4 Workshop" autocomplete="off" />
+    </div>
+    <div class="field">
+      <label>Host / IP</label>
+      <input id="pHost" placeholder="192.168.1.50" autocomplete="off" />
+      <div class="hint">IP address or hostname on your LAN</div>
+    </div>
+    <div class="field">
+      <label>Username</label>
+      <input id="pUser" value="maker" autocomplete="off" />
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input id="pPass" type="password" placeholder="PrusaLink password" autocomplete="off" />
+    </div>
+    <div class="field">
+      <label>API key <span style="color:var(--text-3);text-transform:none;letter-spacing:0;font-weight:400">(optional)</span></label>
+      <input id="pApiKey" placeholder="Leave empty for digest auth" autocomplete="off" />
+    </div>
+    <div class="modal-error" id="addError"></div>
+    <div class="modal-footer">
+      <button class="btn" onclick="hideAddPrinter()">Cancel</button>
+      <button class="btn btn-accent" id="addBtn" onclick="addPrinter()">Connect</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ ICONS (inline SVG templates) ═══════════════════════ -->
+<script>
+const ICONS = {
+  file: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>',
+  pause: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="10" y1="4" x2="10" y2="20"/><line x1="14" y1="4" x2="14" y2="20"/></svg>',
+  play: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>',
+  stop: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>',
+  trash: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>',
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════════════
+let printers = [];
+let telemetry = {};
+let ws = null;
+let wsConnected = false;
+const API = window.location.origin;
+
+// ═══════════════════════════════════════════════════════════════════
+// WEBSOCKET
+// ═══════════════════════════════════════════════════════════════════
+function connectWS() {
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  ws = new WebSocket(`${proto}://${location.host}/ws`);
+  ws.onopen = () => {
+    wsConnected = true;
+    document.getElementById('wsDot').classList.add('connected');
+    document.getElementById('wsLabel').textContent = 'live';
+  };
+  ws.onclose = () => {
+    wsConnected = false;
+    document.getElementById('wsDot').classList.remove('connected');
+    document.getElementById('wsLabel').textContent = 'reconnecting';
+    setTimeout(connectWS, 3000);
+  };
+  ws.onmessage = (evt) => {
+    const msg = JSON.parse(evt.data);
+    if (msg.type === 'telemetry') {
+      telemetry = msg.printers || {};
+      renderPrinters();
+    }
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// API
+// ═══════════════════════════════════════════════════════════════════
+async function fetchPrinters() {
+  try {
+    const r = await fetch(`${API}/api/printers`);
+    printers = await r.json();
+    renderPrinters();
+  } catch(e) { /* silent */ }
+}
+
+async function addPrinter() {
+  const btn = document.getElementById('addBtn');
+  const err = document.getElementById('addError');
+  btn.textContent = 'Connecting...';
+  btn.disabled = true;
+  err.style.display = 'none';
+  try {
+    const r = await fetch(`${API}/api/printers`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        name: document.getElementById('pName').value,
+        host: document.getElementById('pHost').value,
+        username: document.getElementById('pUser').value,
+        password: document.getElementById('pPass').value,
+        api_key: document.getElementById('pApiKey').value,
+      })
+    });
+    if (!r.ok) {
+      const e = await r.json();
+      throw new Error(e.detail || 'Connection failed');
+    }
+    hideAddPrinter();
+    await fetchPrinters();
+  } catch(e) {
+    err.textContent = e.message;
+    err.style.display = 'block';
+  }
+  btn.textContent = 'Connect';
+  btn.disabled = false;
+}
+
+async function deletePrinter(id) {
+  if (!confirm('Remove this printer?')) return;
+  await fetch(`${API}/api/printers/${id}`, {method: 'DELETE'});
+  await fetchPrinters();
+}
+
+async function printerAction(printerId, action, jobId) {
+  let method = 'POST';
+  let url = `${API}/api/printers/${printerId}/job/${jobId}/${action}`;
+  if (action === 'stop') {
+    method = 'DELETE';
+    url = `${API}/api/printers/${printerId}/job/${jobId}`;
+  }
+  await fetch(url, {method});
+}
+
+async function loadHistory() {
+  try {
+    const r = await fetch(`${API}/api/history`);
+    const data = await r.json();
+    const tbody = document.getElementById('historyBody');
+    if (data.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-3);padding:40px">No print history yet</td></tr>';
+      return;
+    }
+    tbody.innerHTML = data.map(h => `
+      <tr>
+        <td>${h.printer_name || h.printer_id}</td>
+        <td class="truncate" style="max-width:220px">${h.file_name || '—'}</td>
+        <td>${h.started_at ? new Date(h.started_at).toLocaleString() : '—'}</td>
+        <td><span class="p-badge badge-${(h.status||'').toLowerCase()}">${h.status || '—'}</span></td>
+        <td>${h.time_printing ? formatTime(h.time_printing) : '—'}</td>
+      </tr>
+    `).join('');
+  } catch(e) { /* silent */ }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// RENDERING
+// ═══════════════════════════════════════════════════════════════════
+function getState(pid) {
+  const t = telemetry[pid];
+  if (!t || !t.online) return 'offline';
+  return (t.status?.printer?.state || 'idle').toLowerCase();
+}
+
+function formatTime(seconds) {
+  if (!seconds || seconds < 0) return '--:--';
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.floor(seconds % 60);
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+
+function formatTemp(val) {
+  if (val === undefined || val === null) return '—';
+  return `${val.toFixed(1)}°`;
+}
+
+function renderPrinters() {
+  const grid = document.getElementById('printerGrid');
+  const empty = document.getElementById('emptyState');
+  const count = printers.length;
+  document.getElementById('printerCount').textContent = count;
+  document.getElementById('printerCountHeader').textContent = `${count} printer${count !== 1 ? 's' : ''}`;
+
+  if (count === 0) {
+    grid.innerHTML = '';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+
+  grid.innerHTML = printers.map((p, i) => {
+    const pid = p.id;
+    const t = telemetry[pid] || {};
+    const online = t.online;
+    const state = getState(pid);
+    const printer = t.status?.printer || {};
+    const job = t.job || t.status?.job || {};
+    const progress = job?.progress ?? 0;
+    const timeRemaining = job?.time_remaining;
+    const timePrinting = job?.time_printing;
+    const fileName = job?.file?.display_name || job?.file?.name || '';
+    const jobId = job?.id;
+    const isPrinting = ['printing','paused'].includes(state);
+
+    return `
+      <div class="p-card s-${state} fade-up" style="animation-delay:${i * 40}ms">
+        <div class="p-head">
+          <div>
+            <div class="p-name">${p.name}</div>
+            <div class="p-host">${p.host}${p.printer_type ? ' · ' + p.printer_type : ''}</div>
+          </div>
+          <span class="p-badge badge-${state}">${online ? state : 'offline'}</span>
+        </div>
+        <div class="p-body">
+          <div class="temps-row">
+            <div class="temp-pill">
+              <span class="label">Nozzle</span>
+              <div class="reading">
+                <span class="val">${formatTemp(printer.temp_nozzle)}</span>
+                ${printer.target_nozzle ? `<span class="target">/ ${formatTemp(printer.target_nozzle)}</span>` : ''}
+              </div>
+            </div>
+            <div class="temp-pill">
+              <span class="label">Bed</span>
+              <div class="reading">
+                <span class="val">${formatTemp(printer.temp_bed)}</span>
+                ${printer.target_bed ? `<span class="target">/ ${formatTemp(printer.target_bed)}</span>` : ''}
+              </div>
+            </div>
+          </div>
+          ${isPrinting ? `
+          <div class="progress-block">
+            <div class="progress-track">
+              <div class="progress-fill" style="width:${progress}%"></div>
+            </div>
+            <div class="progress-meta">
+              <span class="progress-pct">${progress.toFixed(1)}%</span>
+              ${timePrinting != null ? `<span>${formatTime(timePrinting)} elapsed</span>` : ''}
+              ${timeRemaining != null ? `<span>${formatTime(timeRemaining)} left</span>` : ''}
+            </div>
+          </div>
+          ` : ''}
+          ${fileName ? `<div class="file-tag">${ICONS.file}<span class="truncate">${fileName}</span></div>` : ''}
+        </div>
+        ${online ? `
+        <div class="p-actions">
+          ${state === 'printing' && jobId ? `
+            <button class="btn btn-sm" onclick="printerAction('${pid}','pause',${jobId})">${ICONS.pause} Pause</button>
+            <button class="btn btn-sm btn-danger" onclick="printerAction('${pid}','stop',${jobId})">${ICONS.stop} Stop</button>
+          ` : ''}
+          ${state === 'paused' && jobId ? `
+            <button class="btn btn-sm btn-accent" onclick="printerAction('${pid}','resume',${jobId})">${ICONS.play} Resume</button>
+            <button class="btn btn-sm btn-danger" onclick="printerAction('${pid}','stop',${jobId})">${ICONS.stop} Stop</button>
+          ` : ''}
+          <span class="spacer"></span>
+          <button class="btn btn-sm btn-ghost" onclick="deletePrinter('${pid}')">${ICONS.trash}</button>
+        </div>
+        ` : `
+        <div class="p-actions">
+          <span class="error-text">${t.error ? t.error.substring(0, 60) : 'Unreachable'}</span>
+          <span class="spacer"></span>
+          <button class="btn btn-sm btn-ghost" onclick="deletePrinter('${pid}')">${ICONS.trash}</button>
+        </div>
+        `}
+      </div>
+    `;
+  }).join('');
+}
+
+function renderSettingsPrinters() {
+  const el = document.getElementById('settingsPrinters');
+  if (printers.length === 0) {
+    el.innerHTML = '<div style="color:var(--text-3);font-size:12.5px">No printers registered.</div>';
+    return;
+  }
+  el.innerHTML = printers.map(p => `
+    <div class="settings-printer-row">
+      <div>
+        <div class="settings-printer-name">${p.name}</div>
+        <div class="settings-printer-host">${p.host}${p.printer_type ? ' · ' + p.printer_type : ''}</div>
+      </div>
+      <button class="btn btn-sm btn-danger" onclick="deletePrinter('${p.id}')">Remove</button>
+    </div>
+  `).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// MODAL
+// ═══════════════════════════════════════════════════════════════════
+function showAddPrinter() {
+  const m = document.getElementById('addModal');
+  m.classList.add('show');
+  document.getElementById('pName').value = '';
+  document.getElementById('pHost').value = '';
+  document.getElementById('pUser').value = 'maker';
+  document.getElementById('pPass').value = '';
+  document.getElementById('pApiKey').value = '';
+  document.getElementById('addError').style.display = 'none';
+  setTimeout(() => document.getElementById('pName').focus(), 100);
+}
+function hideAddPrinter() {
+  document.getElementById('addModal').classList.remove('show');
+}
+document.getElementById('addModal').addEventListener('click', (e) => {
+  if (e.target === e.currentTarget) hideAddPrinter();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') hideAddPrinter();
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// TABS
+// ═══════════════════════════════════════════════════════════════════
+document.querySelectorAll('.topbar-nav button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.topbar-nav button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    const tab = btn.dataset.tab;
+    document.getElementById(`tab-${tab}`).classList.add('active');
+    if (tab === 'history') loadHistory();
+    if (tab === 'settings') renderSettingsPrinters();
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════════════
+fetchPrinters();
+connectWS();
+setInterval(fetchPrinters, 30000);
+</script>
+</body>
+</html>
