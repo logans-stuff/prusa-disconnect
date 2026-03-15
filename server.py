@@ -475,71 +475,78 @@ async def polling_loop():
 
 _queue_processing: set = set()  # printers currently being sent a queue job
 
-async def process_queue():
-    """Check each printer's queue — if idle/ready and queue has items, start next print."""
+async def send_next_queue_item(pid: str, client: PrusaLinkClient) -> dict:
+    """Send the next queued item for a printer. Returns {"ok": bool, "detail": str}."""
+    if pid in _queue_processing:
+        return {"ok": False, "detail": "Already processing a queue job"}
     conn = get_db()
+    # Skip if printer already has an active queue item
+    active = conn.execute(
+        "SELECT 1 FROM print_queue WHERE printer_id = ? AND status = 'printing' LIMIT 1",
+        (pid,)
+    ).fetchone()
+    if active:
+        conn.close()
+        return {"ok": False, "detail": "Printer already has an active queue job"}
+    row = conn.execute(
+        "SELECT q.*, g.filename FROM print_queue q JOIN gcodes g ON q.gcode_id = g.id "
+        "WHERE q.printer_id = ? AND q.status = 'queued' ORDER BY q.position LIMIT 1",
+        (pid,)
+    ).fetchone()
+    if not row:
+        conn.close()
+        return {"ok": False, "detail": "No queued items"}
+    qid = row["id"]
+    gcode_id = row["gcode_id"]
+    filename = row["filename"]
+    gcode_path = GCODE_DIR / gcode_id
+    if not gcode_path.exists():
+        conn.execute("UPDATE print_queue SET status = 'error' WHERE id = ?", (qid,))
+        conn.commit()
+        conn.close()
+        return {"ok": False, "detail": "G-code file missing from storage"}
+    _queue_processing.add(pid)
+    try:
+        data = gcode_path.read_bytes()
+        storage = await client.get_default_storage()
+        result = await client.upload_file(storage, filename, data, print_after=True)
+        if result["ok"]:
+            now = datetime.now(timezone.utc).isoformat()
+            conn.execute("UPDATE print_queue SET status = 'printing', started_at = ? WHERE id = ?",
+                         (now, qid))
+            conn.execute(
+                "INSERT INTO print_history (printer_id, file_name, started_at, status) VALUES (?,?,?,?)",
+                (pid, filename, now, "PRINTING")
+            )
+            conn.commit()
+            conn.close()
+            return {"ok": True, "detail": f"Sending {filename}"}
+        else:
+            log.error("Queue upload failed for %s: HTTP %d — %s",
+                      filename, result["status"], result["detail"])
+            conn.execute("UPDATE print_queue SET status = 'error' WHERE id = ?", (qid,))
+            conn.commit()
+            conn.close()
+            return {"ok": False, "detail": f"Upload failed: HTTP {result['status']}"}
+    except Exception as e:
+        log.error("Queue error for printer %s: %s", pid, e)
+        conn.execute("UPDATE print_queue SET status = 'error' WHERE id = ?", (qid,))
+        conn.commit()
+        conn.close()
+        return {"ok": False, "detail": str(e)}
+    finally:
+        _queue_processing.discard(pid)
+
+async def process_queue():
+    """Auto-process queue for printers that are idle/ready."""
     for pid, client in list(printer_clients.items()):
-        if pid in _queue_processing:
-            continue
         t = telemetry_store.get(pid, {})
-        log.warning("Queue check printer %s: online=%s telemetry_keys=%s",
-                    pid, t.get("online"), list(t.keys()))
         if not t.get("online"):
             continue
-        raw_status = t.get("status", {})
-        state = (raw_status.get("printer", {}).get("state", "")).lower()
-        log.warning("Queue check printer %s: state=%r raw_keys=%s", pid, state, list(raw_status.keys()))
-        if state not in ("idle", "ready", "stopped"):
+        state = (t.get("status", {}).get("printer", {}).get("state", "")).lower()
+        if state not in ("idle", "ready"):
             continue
-        # Skip if printer already has an active queue item
-        active = conn.execute(
-            "SELECT 1 FROM print_queue WHERE printer_id = ? AND status = 'printing' LIMIT 1",
-            (pid,)
-        ).fetchone()
-        if active:
-            continue
-        # Get next queued item
-        row = conn.execute(
-            "SELECT q.*, g.filename FROM print_queue q JOIN gcodes g ON q.gcode_id = g.id "
-            "WHERE q.printer_id = ? AND q.status = 'queued' ORDER BY q.position LIMIT 1",
-            (pid,)
-        ).fetchone()
-        if not row:
-            continue
-        qid = row["id"]
-        gcode_id = row["gcode_id"]
-        filename = row["filename"]
-        gcode_path = GCODE_DIR / gcode_id
-        if not gcode_path.exists():
-            conn.execute("UPDATE print_queue SET status = 'error' WHERE id = ?", (qid,))
-            conn.commit()
-            continue
-        _queue_processing.add(pid)
-        try:
-            data = gcode_path.read_bytes()
-            storage = await client.get_default_storage()
-            result = await client.upload_file(storage, filename, data, print_after=True)
-            if result["ok"]:
-                now = datetime.now(timezone.utc).isoformat()
-                conn.execute("UPDATE print_queue SET status = 'printing', started_at = ? WHERE id = ?",
-                             (now, qid))
-                conn.execute(
-                    "INSERT INTO print_history (printer_id, file_name, started_at, status) VALUES (?,?,?,?)",
-                    (pid, filename, now, "PRINTING")
-                )
-                conn.commit()
-            else:
-                log.error("Queue upload failed for %s: HTTP %d — %s",
-                          filename, result["status"], result["detail"])
-                conn.execute("UPDATE print_queue SET status = 'error' WHERE id = ?", (qid,))
-                conn.commit()
-        except Exception as e:
-            log.error("Queue error for printer %s: %s", pid, e)
-            conn.execute("UPDATE print_queue SET status = 'error' WHERE id = ?", (qid,))
-            conn.commit()
-        finally:
-            _queue_processing.discard(pid)
-    conn.close()
+        await send_next_queue_item(pid, client)
 
 # ---------------------------------------------------------------------------
 # FastAPI app
@@ -975,6 +982,17 @@ async def clear_queue(printer_id: str = Query(...)):
     conn.commit()
     conn.close()
     return {"ok": True}
+
+@app.post("/api/queue/continue/{printer_id}")
+async def continue_queue(printer_id: str):
+    """Manually trigger the next queued job for a printer (e.g. after removing finished print)."""
+    client = printer_clients.get(printer_id)
+    if not client:
+        raise HTTPException(404, "Printer not found")
+    result = await send_next_queue_item(printer_id, client)
+    if not result["ok"]:
+        raise HTTPException(400, result["detail"])
+    return result
 
 # ---------------------------------------------------------------------------
 # API: Print history
