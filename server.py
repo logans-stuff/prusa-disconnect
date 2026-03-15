@@ -310,6 +310,14 @@ async def add_printer(body: PrinterAdd):
                              password=body.password, api_key=body.api_key)
     try:
         version = await client.get_version()
+    except httpx.ConnectError:
+        raise HTTPException(400, f"Connection refused — is the printer at {body.host} powered on and connected to the network?")
+    except httpx.TimeoutException:
+        raise HTTPException(400, f"Timed out connecting to {body.host} — check the IP address and ensure the printer is on your network")
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 401:
+            raise HTTPException(400, f"Authentication failed for {body.host} — check username/password or API key")
+        raise HTTPException(400, f"Printer at {body.host} returned HTTP {e.response.status_code}")
     except Exception as e:
         raise HTTPException(400, f"Cannot reach printer at {body.host}: {e}")
 
@@ -515,9 +523,10 @@ FRONTEND_DIR = Path(__file__).parent / "frontend"
 
 @app.get("/", response_class=HTMLResponse)
 async def serve_frontend():
-    index = FRONTEND_DIR / "index.html"
-    if index.exists():
-        return index.read_text()
+    # Check both frontend/index.html and root Index.htm
+    for candidate in [FRONTEND_DIR / "index.html", Path(__file__).parent / "Index.htm"]:
+        if candidate.exists():
+            return candidate.read_text()
     return "<h1>PrusaDisconnect</h1><p>Frontend not found. Place index.html in ./frontend/</p>"
 
 @app.get("/assets/{path:path}")
