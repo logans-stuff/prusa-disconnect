@@ -13,6 +13,7 @@ import time
 import uuid
 import os
 import sqlite3
+from urllib.parse import quote
 from datetime import datetime, timezone
 from pathlib import Path
 from contextlib import asynccontextmanager
@@ -186,7 +187,8 @@ class PrusaLinkClient:
                 "Print-After-Upload": "?1" if print_after else "?0",
                 "Overwrite": "?1",
             }
-            r = await c.put(f"/api/v1/files/{storage}/{path}",
+            encoded_path = quote(path, safe="")
+            r = await c.put(f"/api/v1/files/{storage}/{encoded_path}",
                             content=data, headers=headers)
             ok = r.status_code in (201, 204)
             detail = ""
