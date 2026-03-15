@@ -166,6 +166,17 @@ class PrusaLinkClient:
             r.raise_for_status()
             return r.json()
 
+    async def get_default_storage(self) -> str:
+        """Return the first available writable storage name (usb, local, etc.)."""
+        try:
+            info = await self.get_storage()
+            for name, meta in info.get("storage_list", {}).items():
+                if meta.get("available", False):
+                    return name
+        except Exception:
+            pass
+        return "usb"
+
     async def get_files(self, storage: str = "local", path: str = "") -> dict:
         async with self._client() as c:
             r = await c.get(f"/api/v1/files/{storage}/{path}")
@@ -182,8 +193,9 @@ class PrusaLinkClient:
                 log.info("Pre-flight GET /api/v1/info → %d", pfr.status_code)
             except Exception as exc:
                 log.warning("Pre-flight GET failed: %s", exc)
+            ct = "application/gcode+binary" if path.endswith(".bgcode") else "text/x.gcode"
             headers = {
-                "Content-Type": "application/octet-stream",
+                "Content-Type": ct,
                 "Print-After-Upload": "?1" if print_after else "?0",
                 "Overwrite": "?1",
             }
@@ -205,7 +217,7 @@ class PrusaLinkClient:
 
     async def start_print(self, storage: str, path: str) -> bool:
         async with self._client() as c:
-            r = await c.post(f"/api/v1/files/{storage}/{path}")
+            r = await c.post(f"/api/v1/files/{storage}/{quote(path, safe='')}")
             return r.status_code == 204
 
     async def pause_job(self, job_id: int) -> bool:
@@ -503,7 +515,8 @@ async def process_queue():
         _queue_processing.add(pid)
         try:
             data = gcode_path.read_bytes()
-            result = await client.upload_file("local", filename, data, print_after=True)
+            storage = await client.get_default_storage()
+            result = await client.upload_file(storage, filename, data, print_after=True)
             if result["ok"]:
                 now = datetime.now(timezone.utc).isoformat()
                 conn.execute("UPDATE print_queue SET status = 'printing', started_at = ? WHERE id = ?",
@@ -880,7 +893,8 @@ async def send_gcode_to_printer(gcode_id: str, printer_id: str,
     if not gcode_path.exists():
         raise HTTPException(404, "File missing from storage")
     data = gcode_path.read_bytes()
-    result = await client.upload_file("local", row["filename"], data, print_after)
+    storage = await client.get_default_storage()
+    result = await client.upload_file(storage, row["filename"], data, print_after)
     if not result["ok"]:
         raise HTTPException(502, f"Printer rejected upload: HTTP {result['status']} — {result['detail']}")
     if print_after:
@@ -1108,7 +1122,8 @@ async def octoprint_upload(file: UploadFile = File(...),
             client = printer_clients.get(pid)
             if client:
                 try:
-                    result = await client.upload_file("local", file.filename, data, print_after=True)
+                    storage = await client.get_default_storage()
+                    result = await client.upload_file(storage, file.filename, data, print_after=True)
                     if result["ok"]:
                         conn.execute(
                             "INSERT INTO print_history (printer_id, file_name, started_at, status) VALUES (?,?,?,?)",
