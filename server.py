@@ -873,9 +873,9 @@ FRONTEND_DIR = Path(__file__).parent / "frontend"
 
 @app.get("/", response_class=HTMLResponse)
 async def serve_frontend():
-    for candidate in [FRONTEND_DIR / "index.html", Path(__file__).parent / "Index.htm"]:
-        if candidate.exists():
-            return candidate.read_text()
+    index = FRONTEND_DIR / "index.html"
+    if index.exists():
+        return index.read_text()
     return "<h1>PrusaDisconnect</h1><p>Frontend not found. Place index.html in ./frontend/</p>"
 
 @app.get("/assets/{path:path}")
