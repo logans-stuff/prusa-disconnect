@@ -683,6 +683,48 @@ body {
   </div>
 </div>
 
+<!-- ═══════════════════════ EDIT PRINTER MODAL ═══════════════════════ -->
+<div class="modal-backdrop" id="editModal">
+  <div class="modal-box">
+    <h2>Edit printer</h2>
+    <input type="hidden" id="editId" />
+    <div class="field">
+      <label>Name</label>
+      <input id="eName" autocomplete="off" />
+    </div>
+    <div class="field">
+      <label>Host / IP</label>
+      <input id="eHost" autocomplete="off" />
+    </div>
+    <div class="field">
+      <label>Username</label>
+      <input id="eUser" autocomplete="off" />
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input id="ePass" type="password" placeholder="Leave blank to keep current" autocomplete="off" />
+    </div>
+    <div class="field">
+      <label>API key</label>
+      <input id="eApiKey" placeholder="Leave blank to keep current" autocomplete="off" />
+    </div>
+    <div class="field">
+      <label>Camera URL <span style="color:var(--text-3);text-transform:none;letter-spacing:0;font-weight:400">(optional)</span></label>
+      <input id="eCamUrl" placeholder="http://192.168.1.50:8080/?action=snapshot" autocomplete="off" />
+    </div>
+    <div class="field">
+      <label style="display:flex;align-items:center;gap:8px">
+        <input type="checkbox" id="eEnabled" style="width:auto;margin:0" checked> Enabled
+      </label>
+    </div>
+    <div class="modal-error" id="editError"></div>
+    <div class="modal-footer">
+      <button class="btn" onclick="hideEditPrinter()">Cancel</button>
+      <button class="btn btn-accent" id="editBtn" onclick="savePrinter()">Save</button>
+    </div>
+  </div>
+</div>
+
 <!-- ═══════════════════════ CAMERA MODAL ═══════════════════════ -->
 <div class="cam-modal" id="camModal" onclick="hideCamModal()">
   <div class="cam-modal-label" id="camModalLabel"></div>
@@ -699,6 +741,7 @@ const ICONS = {
   send: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>',
   download: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>',
   cam: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>',
+  edit: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>',
   expand: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>',
 };
 
@@ -1129,7 +1172,10 @@ function renderSettingsPrinters() {
         <div class="settings-printer-name">${p.name}</div>
         <div class="settings-printer-host">${p.host}${p.printer_type ? ' \u00B7 ' + p.printer_type : ''}${p.camera_url ? ' \u00B7 cam' : ''}</div>
       </div>
-      <button class="btn btn-sm btn-danger" onclick="deletePrinter('${p.id}')">Remove</button>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-sm" onclick="showEditPrinter('${p.id}')">${ICONS.edit} Edit</button>
+        <button class="btn btn-sm btn-danger" onclick="deletePrinter('${p.id}')">Remove</button>
+      </div>
     </div>
   `).join('');
 }
@@ -1179,6 +1225,63 @@ function hideAddPrinter() {
   document.getElementById('addModal').classList.remove('show');
 }
 
+function showEditPrinter(pid) {
+  const p = printers.find(x => x.id === pid);
+  if (!p) return;
+  document.getElementById('editId').value = pid;
+  document.getElementById('eName').value = p.name || '';
+  document.getElementById('eHost').value = p.host || '';
+  document.getElementById('eUser').value = p.username || 'maker';
+  document.getElementById('ePass').value = '';
+  document.getElementById('eApiKey').value = '';
+  document.getElementById('eCamUrl').value = p.camera_url || '';
+  document.getElementById('eEnabled').checked = p.enabled !== 0;
+  document.getElementById('editError').style.display = 'none';
+  document.getElementById('editModal').classList.add('show');
+  setTimeout(() => document.getElementById('eName').focus(), 100);
+}
+function hideEditPrinter() {
+  document.getElementById('editModal').classList.remove('show');
+}
+
+async function savePrinter() {
+  const btn = document.getElementById('editBtn');
+  const err = document.getElementById('editError');
+  const pid = document.getElementById('editId').value;
+  btn.textContent = 'Saving...';
+  btn.disabled = true;
+  err.style.display = 'none';
+  const body = {
+    name: document.getElementById('eName').value,
+    host: document.getElementById('eHost').value,
+    username: document.getElementById('eUser').value,
+    camera_url: document.getElementById('eCamUrl').value,
+    enabled: document.getElementById('eEnabled').checked,
+  };
+  const pass = document.getElementById('ePass').value;
+  if (pass) body.password = pass;
+  const apiKey = document.getElementById('eApiKey').value;
+  if (apiKey) body.api_key = apiKey;
+  try {
+    const r = await fetch(`${API}/api/printers/${pid}`, {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body)
+    });
+    if (!r.ok) {
+      const e = await r.json();
+      throw new Error(e.detail || 'Failed to update printer');
+    }
+    hideEditPrinter();
+    await fetchPrinters();
+  } catch(e) {
+    err.textContent = e.message;
+    err.style.display = 'block';
+  }
+  btn.textContent = 'Save';
+  btn.disabled = false;
+}
+
 // Close modals on backdrop click / ESC
 document.getElementById('addModal').addEventListener('click', (e) => {
   if (e.target === e.currentTarget) hideAddPrinter();
@@ -1186,10 +1289,14 @@ document.getElementById('addModal').addEventListener('click', (e) => {
 document.getElementById('sendModal').addEventListener('click', (e) => {
   if (e.target === e.currentTarget) hideSendModal();
 });
+document.getElementById('editModal').addEventListener('click', (e) => {
+  if (e.target === e.currentTarget) hideEditPrinter();
+});
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     hideAddPrinter();
     hideSendModal();
+    hideEditPrinter();
     hideCamModal();
   }
 });
