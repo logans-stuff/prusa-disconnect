@@ -8,6 +8,7 @@ No cloud dependency. Runs on your LAN.
 import asyncio
 import hashlib
 import json
+import logging
 import time
 import uuid
 import os
@@ -16,6 +17,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from contextlib import asynccontextmanager
 from typing import Optional, List
+
+log = logging.getLogger("prusadisconnect")
 
 import httpx
 from fastapi import (FastAPI, HTTPException, UploadFile, File, Form, Query,
@@ -169,7 +172,8 @@ class PrusaLinkClient:
             return r.json()
 
     async def upload_file(self, storage: str, path: str, data: bytes,
-                          print_after: bool = False) -> bool:
+                          print_after: bool = False) -> dict:
+        """Upload file to printer. Returns {"ok": bool, "status": int, "detail": str}."""
         async with self._client(timeout=120.0) as c:
             headers = {
                 "Content-Type": "application/octet-stream",
@@ -178,7 +182,18 @@ class PrusaLinkClient:
             }
             r = await c.put(f"/api/v1/files/{storage}/{path}",
                             content=data, headers=headers)
-            return r.status_code in (201, 204)
+            ok = r.status_code in (201, 204)
+            detail = ""
+            if not ok:
+                try:
+                    detail = r.text
+                except Exception:
+                    detail = f"HTTP {r.status_code}"
+                log.warning("Upload to %s/%s/%s returned %d: %s",
+                            self.base, storage, path, r.status_code, detail)
+            else:
+                log.info("Upload to %s/%s/%s OK (%d)", self.base, storage, path, r.status_code)
+            return {"ok": ok, "status": r.status_code, "detail": detail}
 
     async def start_print(self, storage: str, path: str) -> bool:
         async with self._client() as c:
@@ -480,8 +495,8 @@ async def process_queue():
         _queue_processing.add(pid)
         try:
             data = gcode_path.read_bytes()
-            ok = await client.upload_file("local", filename, data, print_after=True)
-            if ok:
+            result = await client.upload_file("local", filename, data, print_after=True)
+            if result["ok"]:
                 now = datetime.now(timezone.utc).isoformat()
                 conn.execute("UPDATE print_queue SET status = 'printing', started_at = ? WHERE id = ?",
                              (now, qid))
@@ -491,11 +506,12 @@ async def process_queue():
                 )
                 conn.commit()
             else:
+                log.error("Queue upload failed for %s: HTTP %d — %s",
+                          filename, result["status"], result["detail"])
                 conn.execute("UPDATE print_queue SET status = 'error' WHERE id = ?", (qid,))
                 conn.commit()
         except Exception as e:
-            import logging
-            logging.error(f"Queue error for printer {pid}: {e}")
+            log.error("Queue error for printer %s: %s", pid, e)
             conn.execute("UPDATE print_queue SET status = 'error' WHERE id = ?", (qid,))
             conn.commit()
         finally:
@@ -754,8 +770,10 @@ async def upload_file_to_printer(printer_id: str, storage: str, path: str,
     if not client:
         raise HTTPException(404)
     data = await file.read()
-    ok = await client.upload_file(storage, path or file.filename, data, print_after)
-    return {"ok": ok}
+    result = await client.upload_file(storage, path or file.filename, data, print_after)
+    if not result["ok"]:
+        raise HTTPException(502, f"Printer rejected upload: HTTP {result['status']} — {result['detail']}")
+    return {"ok": True}
 
 @app.post("/api/printers/{printer_id}/print/{storage}/{path:path}")
 async def start_print(printer_id: str, storage: str, path: str):
@@ -854,8 +872,10 @@ async def send_gcode_to_printer(gcode_id: str, printer_id: str,
     if not gcode_path.exists():
         raise HTTPException(404, "File missing from storage")
     data = gcode_path.read_bytes()
-    ok = await client.upload_file("local", row["filename"], data, print_after)
-    if ok and print_after:
+    result = await client.upload_file("local", row["filename"], data, print_after)
+    if not result["ok"]:
+        raise HTTPException(502, f"Printer rejected upload: HTTP {result['status']} — {result['detail']}")
+    if print_after:
         conn = get_db()
         conn.execute(
             "INSERT INTO print_history (printer_id, file_name, started_at, status) VALUES (?,?,?,?)",
@@ -863,7 +883,7 @@ async def send_gcode_to_printer(gcode_id: str, printer_id: str,
         )
         conn.commit()
         conn.close()
-    return {"ok": ok}
+    return {"ok": True}
 
 # ---------------------------------------------------------------------------
 # API: Print queue
@@ -1080,8 +1100,8 @@ async def octoprint_upload(file: UploadFile = File(...),
             client = printer_clients.get(pid)
             if client:
                 try:
-                    ok = await client.upload_file("local", file.filename, data, print_after=True)
-                    if ok:
+                    result = await client.upload_file("local", file.filename, data, print_after=True)
+                    if result["ok"]:
                         conn.execute(
                             "INSERT INTO print_history (printer_id, file_name, started_at, status) VALUES (?,?,?,?)",
                             (pid, file.filename, datetime.now(timezone.utc).isoformat(), "PRINTING")
