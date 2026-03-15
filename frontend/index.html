@@ -468,6 +468,7 @@ body {
       <button data-tab="files">Files</button>
       <button data-tab="queue">Queue</button>
       <button data-tab="history">History</button>
+      <button data-tab="metrics">Metrics</button>
       <button data-tab="settings">Settings</button>
     </nav>
   </div>
@@ -570,6 +571,16 @@ body {
   </div>
 
   <!-- SETTINGS -->
+  <!-- METRICS -->
+  <div id="tab-metrics" class="tab-content">
+    <div class="section-bar">
+      <div class="section-title">Printer Metrics</div>
+    </div>
+    <div id="metricsTabContent">
+      <div style="color:var(--text-3);text-align:center;padding:40px">Loading metrics...</div>
+    </div>
+  </div>
+
   <div id="tab-settings" class="tab-content">
     <div class="section-bar">
       <div class="section-title">Settings</div>
@@ -611,6 +622,12 @@ body {
       </div>
     </div>
     <div class="settings-card">
+      <h3>Printer Metrics</h3>
+      <div id="metricsContainer">
+        <div style="color:var(--text-3);font-size:12.5px">Loading...</div>
+      </div>
+    </div>
+    <div class="settings-card">
       <h3>Registered printers</h3>
       <div id="settingsPrinters">
         <div style="color:var(--text-3);font-size:12.5px">No printers registered.</div>
@@ -648,6 +665,11 @@ body {
       <label>Camera URL <span style="color:var(--text-3);text-transform:none;letter-spacing:0;font-weight:400">(optional)</span></label>
       <input id="pCamUrl" placeholder="http://192.168.1.50:8080/?action=snapshot" autocomplete="off" />
       <div class="hint">External camera snapshot URL (mjpg-streamer, motionEye, etc). Leave blank to use PrusaLink's built-in camera.</div>
+    </div>
+    <div class="field">
+      <label>Discord Webhook <span style="color:var(--text-3);text-transform:none;letter-spacing:0;font-weight:400">(optional)</span></label>
+      <input id="pDiscord" placeholder="https://discord.com/api/webhooks/..." autocomplete="off" />
+      <div class="hint">Get notified on print start, every 5% progress (with snapshot if camera available), and on completion.</div>
     </div>
     <div class="modal-error" id="addError"></div>
     <div class="modal-footer">
@@ -711,6 +733,10 @@ body {
     <div class="field">
       <label>Camera URL <span style="color:var(--text-3);text-transform:none;letter-spacing:0;font-weight:400">(optional)</span></label>
       <input id="eCamUrl" placeholder="http://192.168.1.50:8080/?action=snapshot" autocomplete="off" />
+    </div>
+    <div class="field">
+      <label>Discord Webhook <span style="color:var(--text-3);text-transform:none;letter-spacing:0;font-weight:400">(optional)</span></label>
+      <input id="eDiscord" placeholder="https://discord.com/api/webhooks/..." autocomplete="off" />
     </div>
     <div class="field">
       <label style="display:flex;align-items:center;gap:8px">
@@ -821,6 +847,7 @@ async function addPrinter() {
           password: document.getElementById('pPass').value,
           api_key: document.getElementById('pApiKey').value,
           camera_url: document.getElementById('pCamUrl').value,
+          discord_webhook: document.getElementById('pDiscord').value,
         })
       });
     } catch (fetchErr) {
@@ -1160,6 +1187,122 @@ function renderQueue() {
   `).join('');
 }
 
+async function loadMetrics() {
+  try {
+    const r = await fetch(`${API}/api/metrics`);
+    const data = await r.json();
+    const el = document.getElementById('metricsContainer');
+    if (data.length === 0) {
+      el.innerHTML = '<div style="color:var(--text-3);font-size:12.5px">No printer data yet.</div>';
+      return;
+    }
+    el.innerHTML = data.map(m => {
+      const hours = Math.floor(m.total_print_time_s / 3600);
+      const mins = Math.floor((m.total_print_time_s % 3600) / 60);
+      return `
+        <div style="padding:10px 0;border-bottom:1px solid var(--border-0)">
+          <div style="font-weight:600;font-size:13px;margin-bottom:6px">${m.printer_name}</div>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">
+            <div style="background:var(--bg-2);padding:10px;border-radius:var(--radius);border:1px solid var(--border-0)">
+              <div style="font-family:var(--mono);font-size:9px;color:var(--text-3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:2px">Total Prints</div>
+              <div style="font-family:var(--mono);font-size:18px;font-weight:600">${m.total_prints}</div>
+            </div>
+            <div style="background:var(--bg-2);padding:10px;border-radius:var(--radius);border:1px solid var(--border-0)">
+              <div style="font-family:var(--mono);font-size:9px;color:var(--text-3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:2px">Success Rate</div>
+              <div style="font-family:var(--mono);font-size:18px;font-weight:600;color:${m.success_rate >= 80 ? 'var(--green)' : m.success_rate >= 50 ? 'var(--yellow)' : 'var(--red)'}">${m.success_rate}%</div>
+            </div>
+            <div style="background:var(--bg-2);padding:10px;border-radius:var(--radius);border:1px solid var(--border-0)">
+              <div style="font-family:var(--mono);font-size:9px;color:var(--text-3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:2px">Print Time</div>
+              <div style="font-family:var(--mono);font-size:18px;font-weight:600">${hours}h ${mins}m</div>
+            </div>
+            <div style="background:var(--bg-2);padding:10px;border-radius:var(--radius);border:1px solid var(--border-0)">
+              <div style="font-family:var(--mono);font-size:9px;color:var(--text-3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:2px">Failed</div>
+              <div style="font-family:var(--mono);font-size:18px;font-weight:600;color:${m.failed > 0 ? 'var(--red)' : 'var(--text-2)'}">${m.failed}</div>
+            </div>
+          </div>
+        </div>`;
+    }).join('');
+  } catch(e) {}
+}
+
+async function loadMetricsTab() {
+  const container = document.getElementById('metricsTabContent');
+  try {
+    const r = await fetch(`${API}/api/metrics`);
+    const metrics = await r.json();
+    if (metrics.length === 0) {
+      container.innerHTML = '<div style="color:var(--text-3);text-align:center;padding:40px">No printer data yet.</div>';
+      return;
+    }
+    let html = '';
+    for (const m of metrics) {
+      // Fetch daily history for this printer
+      let history = [];
+      try {
+        const hr = await fetch(`${API}/api/printers/${m.printer_id}/metrics/history?days=30`);
+        history = await hr.json();
+      } catch(e) {}
+
+      const hours = Math.floor(m.total_print_time_s / 3600);
+      const mins = Math.floor((m.total_print_time_s % 3600) / 60);
+
+      // Build bar chart from last 30 days
+      const maxPrints = Math.max(1, ...history.map(h => h.prints));
+      const last30 = [];
+      const now = new Date();
+      for (let i = 29; i >= 0; i--) {
+        const d = new Date(now);
+        d.setDate(d.getDate() - i);
+        const key = d.toISOString().split('T')[0];
+        const found = history.find(h => h.day === key);
+        last30.push({day: key, prints: found ? found.prints : 0, completed: found ? found.completed : 0});
+      }
+
+      html += `
+        <div class="settings-card" style="margin-bottom:16px">
+          <h3 style="font-size:15px;margin-bottom:16px">${m.printer_name}</h3>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:20px">
+            <div style="background:var(--bg-2);padding:12px;border-radius:var(--radius);border:1px solid var(--border-0);text-align:center">
+              <div style="font-family:var(--mono);font-size:9px;color:var(--text-3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px">Total Prints</div>
+              <div style="font-family:var(--mono);font-size:24px;font-weight:600">${m.total_prints}</div>
+            </div>
+            <div style="background:var(--bg-2);padding:12px;border-radius:var(--radius);border:1px solid var(--border-0);text-align:center">
+              <div style="font-family:var(--mono);font-size:9px;color:var(--text-3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px">Success Rate</div>
+              <div style="font-family:var(--mono);font-size:24px;font-weight:600;color:${m.success_rate >= 80 ? 'var(--green)' : m.success_rate >= 50 ? 'var(--yellow)' : m.total_prints === 0 ? 'var(--text-2)' : 'var(--red)'}">${m.success_rate}%</div>
+            </div>
+            <div style="background:var(--bg-2);padding:12px;border-radius:var(--radius);border:1px solid var(--border-0);text-align:center">
+              <div style="font-family:var(--mono);font-size:9px;color:var(--text-3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px">Total Time</div>
+              <div style="font-family:var(--mono);font-size:24px;font-weight:600">${hours}<span style="font-size:12px;color:var(--text-2)">h</span> ${mins}<span style="font-size:12px;color:var(--text-2)">m</span></div>
+            </div>
+            <div style="background:var(--bg-2);padding:12px;border-radius:var(--radius);border:1px solid var(--border-0);text-align:center">
+              <div style="font-family:var(--mono);font-size:9px;color:var(--text-3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px">Failed</div>
+              <div style="font-family:var(--mono);font-size:24px;font-weight:600;color:${m.failed > 0 ? 'var(--red)' : 'var(--text-2)'}">${m.failed}</div>
+            </div>
+          </div>
+          <div style="font-family:var(--mono);font-size:10px;color:var(--text-3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">Print Activity (Last 30 Days)</div>
+          <div style="display:flex;align-items:flex-end;gap:2px;height:80px;padding:0 2px">
+            ${last30.map(d => {
+              const pct = maxPrints > 0 ? (d.prints / maxPrints) * 100 : 0;
+              const allGood = d.prints > 0 && d.completed === d.prints;
+              const color = d.prints === 0 ? 'var(--bg-3)' : allGood ? 'var(--green)' : 'var(--accent)';
+              const dayNum = d.day.split('-')[2];
+              return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px" title="${d.day}: ${d.prints} print${d.prints !== 1 ? 's' : ''}">
+                <div style="width:100%;min-height:${d.prints > 0 ? '4' : '2'}px;height:${Math.max(pct, 2)}%;background:${color};border-radius:2px;transition:height 0.3s var(--ease)"></div>
+              </div>`;
+            }).join('')}
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-top:4px">
+            <span style="font-family:var(--mono);font-size:9px;color:var(--text-3)">${last30[0].day.slice(5)}</span>
+            <span style="font-family:var(--mono);font-size:9px;color:var(--text-3)">today</span>
+          </div>
+        </div>`;
+    }
+    container.innerHTML = html;
+  } catch(e) {
+    container.innerHTML = '<div style="color:var(--red);text-align:center;padding:40px">Failed to load metrics</div>';
+  }
+}
+
 function renderSettingsPrinters() {
   const el = document.getElementById('settingsPrinters');
   if (printers.length === 0) {
@@ -1218,6 +1361,7 @@ function showAddPrinter() {
   document.getElementById('pPass').value = '';
   document.getElementById('pApiKey').value = '';
   document.getElementById('pCamUrl').value = '';
+  document.getElementById('pDiscord').value = '';
   document.getElementById('addError').style.display = 'none';
   setTimeout(() => document.getElementById('pName').focus(), 100);
 }
@@ -1235,6 +1379,7 @@ function showEditPrinter(pid) {
   document.getElementById('ePass').value = '';
   document.getElementById('eApiKey').value = '';
   document.getElementById('eCamUrl').value = p.camera_url || '';
+  document.getElementById('eDiscord').value = p.discord_webhook || '';
   document.getElementById('eEnabled').checked = p.enabled !== 0;
   document.getElementById('editError').style.display = 'none';
   document.getElementById('editModal').classList.add('show');
@@ -1256,6 +1401,7 @@ async function savePrinter() {
     host: document.getElementById('eHost').value,
     username: document.getElementById('eUser').value,
     camera_url: document.getElementById('eCamUrl').value,
+    discord_webhook: document.getElementById('eDiscord').value,
     enabled: document.getElementById('eEnabled').checked,
   };
   const pass = document.getElementById('ePass').value;
@@ -1335,7 +1481,8 @@ document.querySelectorAll('.topbar-nav button').forEach(btn => {
     const tab = btn.dataset.tab;
     document.getElementById(`tab-${tab}`).classList.add('active');
     if (tab === 'history') loadHistory();
-    if (tab === 'settings') renderSettingsPrinters();
+    if (tab === 'settings') { renderSettingsPrinters(); loadMetrics(); }
+    if (tab === 'metrics') loadMetricsTab();
     if (tab === 'files') fetchGcodes();
     if (tab === 'queue') fetchQueue();
   });
