@@ -484,9 +484,9 @@ async def process_queue():
         t = telemetry_store.get(pid, {})
         if not t.get("online"):
             continue
-        state = (t.get("status", {}).get("printer", {}).get("state", "")).lower()
-        # Only start queue jobs when printer is truly idle/ready — not "finished"
-        # (finished means the last print plate hasn't been cleared yet)
+        raw_status = t.get("status", {})
+        state = (raw_status.get("printer", {}).get("state", "")).lower()
+        log.warning("Queue check printer %s: state=%r raw_keys=%s", pid, state, list(raw_status.keys()))
         if state not in ("idle", "ready"):
             continue
         # Skip if printer already has an active queue item
