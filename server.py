@@ -175,12 +175,12 @@ class PrusaLinkClient:
                           print_after: bool = False) -> dict:
         """Upload file to printer. Returns {"ok": bool, "status": int, "detail": str}."""
         async with self._client(timeout=120.0) as c:
-            # Pre-flight GET to prime digest auth — some printers return 403
-            # instead of 401 on unauthenticated PUT, skipping the handshake.
+            # Pre-flight GET to prime digest auth
             try:
-                await c.get("/api/v1/info")
-            except Exception:
-                pass
+                pfr = await c.get("/api/v1/info")
+                log.info("Pre-flight GET /api/v1/info → %d", pfr.status_code)
+            except Exception as exc:
+                log.warning("Pre-flight GET failed: %s", exc)
             headers = {
                 "Content-Type": "application/octet-stream",
                 "Print-After-Upload": "?1" if print_after else "?0",
