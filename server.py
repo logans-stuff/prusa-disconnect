@@ -438,15 +438,28 @@ async def polling_loop():
         _poll_counter += 1
         await asyncio.sleep(3)
 
+_queue_processing: set = set()  # printers currently being sent a queue job
+
 async def process_queue():
-    """Check each printer's queue — if idle and queue has items, start next print."""
+    """Check each printer's queue — if idle/ready and queue has items, start next print."""
     conn = get_db()
     for pid, client in list(printer_clients.items()):
+        if pid in _queue_processing:
+            continue
         t = telemetry_store.get(pid, {})
         if not t.get("online"):
             continue
         state = (t.get("status", {}).get("printer", {}).get("state", "")).lower()
-        if state not in ("idle", "ready", "finished", ""):
+        # Only start queue jobs when printer is truly idle/ready — not "finished"
+        # (finished means the last print plate hasn't been cleared yet)
+        if state not in ("idle", "ready"):
+            continue
+        # Skip if printer already has an active queue item
+        active = conn.execute(
+            "SELECT 1 FROM print_queue WHERE printer_id = ? AND status = 'printing' LIMIT 1",
+            (pid,)
+        ).fetchone()
+        if active:
             continue
         # Get next queued item
         row = conn.execute(
@@ -464,7 +477,7 @@ async def process_queue():
             conn.execute("UPDATE print_queue SET status = 'error' WHERE id = ?", (qid,))
             conn.commit()
             continue
-        # Upload to printer and start
+        _queue_processing.add(pid)
         try:
             data = gcode_path.read_bytes()
             ok = await client.upload_file("local", filename, data, print_after=True)
@@ -480,9 +493,13 @@ async def process_queue():
             else:
                 conn.execute("UPDATE print_queue SET status = 'error' WHERE id = ?", (qid,))
                 conn.commit()
-        except Exception:
+        except Exception as e:
+            import logging
+            logging.error(f"Queue error for printer {pid}: {e}")
             conn.execute("UPDATE print_queue SET status = 'error' WHERE id = ?", (qid,))
             conn.commit()
+        finally:
+            _queue_processing.discard(pid)
     conn.close()
 
 # ---------------------------------------------------------------------------
