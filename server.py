@@ -575,6 +575,19 @@ app = FastAPI(title="PrusaDisconnect", version="0.2.0", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"],
                    allow_headers=["*"])
 
+@app.middleware("http")
+async def log_octoprint_requests(request: Request, call_next):
+    """Log all /api/ requests to help debug PrusaSlicer connectivity."""
+    if request.url.path.startswith("/api/"):
+        log.info("OctoPrint compat: %s %s (headers: %s)",
+                 request.method, request.url.path,
+                 {k: v for k, v in request.headers.items() if k.lower() in
+                  ("x-api-key", "authorization", "content-type", "user-agent")})
+    response = await call_next(request)
+    if request.url.path.startswith("/api/"):
+        log.info("OctoPrint compat: %s %s -> %d", request.method, request.url.path, response.status_code)
+    return response
+
 # ---------------------------------------------------------------------------
 # Models
 # ---------------------------------------------------------------------------
@@ -1107,7 +1120,7 @@ async def printer_metrics_history(printer_id: str, days: int = Query(30)):
 @app.get("/api/version")
 async def octoprint_version():
     """OctoPrint-compatible version endpoint for PrusaSlicer."""
-    return {"api": "0.1", "server": "1.10.0", "text": "PrusaDisconnect 1.10.0"}
+    return {"api": "0.1", "server": "1.10.0", "text": "OctoPrint 1.10.0"}
 
 @app.post("/api/login")
 async def octoprint_login():
