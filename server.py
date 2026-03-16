@@ -1117,7 +1117,7 @@ async def printer_metrics_history(printer_id: str, days: int = Query(30)):
 # ---------------------------------------------------------------------------
 # PrusaSlicer compatibility (OctoPrint API)
 # ---------------------------------------------------------------------------
-@app.get("/api/version")
+@app.api_route("/api/version", methods=["GET", "HEAD", "OPTIONS"])
 async def octoprint_version():
     """OctoPrint-compatible version endpoint for PrusaSlicer."""
     return {"api": "0.1", "server": "1.10.0", "text": "OctoPrint 1.10.0"}
@@ -1198,6 +1198,31 @@ async def octoprint_upload(file: UploadFile = File(...),
 
     conn.close()
     return result
+
+@app.get("/api/slicer-test")
+async def slicer_test():
+    """Diagnostic page: open in browser to verify OctoPrint compat endpoints."""
+    html = """<html><body style="font-family:monospace;padding:2em">
+    <h2>PrusaSlicer OctoPrint Compatibility Test</h2>
+    <pre id="out">Running tests...</pre>
+    <script>
+    async function test() {
+        const out = document.getElementById('out');
+        let log = '';
+        for (const ep of ['/api/version', '/api/connection', '/api/settings', '/api/printer']) {
+            try {
+                const r = await fetch(ep, {headers: {'X-Api-Key': 'test123'}});
+                const j = await r.json();
+                log += `✓ GET ${ep} → ${r.status}\\n  ${JSON.stringify(j)}\\n\\n`;
+            } catch(e) {
+                log += `✗ GET ${ep} → ${e.message}\\n\\n`;
+            }
+        }
+        out.textContent = log;
+    }
+    test();
+    </script></body></html>"""
+    return HTMLResponse(html)
 
 # ---------------------------------------------------------------------------
 # WebSocket: live telemetry
