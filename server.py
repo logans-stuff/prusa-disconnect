@@ -1114,6 +1114,31 @@ async def octoprint_login():
     """OctoPrint-compatible login endpoint for PrusaSlicer."""
     return {"name": "_api", "session": "prusa-disconnect", "active": True, "admin": True, "user": True}
 
+@app.get("/api/connection")
+async def octoprint_connection():
+    """OctoPrint-compatible connection status endpoint."""
+    return {
+        "current": {"state": "Operational", "port": "/dev/ttyUSB0", "baudrate": 250000,
+                     "printerProfile": "_default"},
+        "options": {"ports": ["/dev/ttyUSB0"], "baudrates": [250000],
+                    "printerProfiles": [{"id": "_default", "name": "Default"}]}
+    }
+
+@app.get("/api/settings")
+async def octoprint_settings():
+    """OctoPrint-compatible settings endpoint."""
+    return {"feature": {"sdSupport": False}, "webcam": {"streamUrl": "", "snapshotUrl": ""}}
+
+@app.get("/api/printer")
+async def octoprint_printer():
+    """OctoPrint-compatible printer state endpoint."""
+    return {
+        "state": {"text": "Operational", "flags": {"operational": True, "printing": False,
+                  "cancelling": False, "pausing": False, "error": False, "paused": False,
+                  "ready": True, "sdReady": False}},
+        "temperature": {}
+    }
+
 @app.post("/api/files/local")
 async def octoprint_upload(file: UploadFile = File(...),
                            print: str = Form("false"),
