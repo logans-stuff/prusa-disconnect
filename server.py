@@ -1107,7 +1107,12 @@ async def printer_metrics_history(printer_id: str, days: int = Query(30)):
 @app.get("/api/version")
 async def octoprint_version():
     """OctoPrint-compatible version endpoint for PrusaSlicer."""
-    return {"api": "0.1", "server": "0.2.0", "text": "PrusaDisconnect 0.2.0"}
+    return {"api": "0.1", "server": "1.10.0", "text": "PrusaDisconnect 1.10.0"}
+
+@app.post("/api/login")
+async def octoprint_login():
+    """OctoPrint-compatible login endpoint for PrusaSlicer."""
+    return {"name": "_api", "session": "prusa-disconnect", "active": True, "admin": True, "user": True}
 
 @app.post("/api/files/local")
 async def octoprint_upload(file: UploadFile = File(...),
