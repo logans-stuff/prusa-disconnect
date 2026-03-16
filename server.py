@@ -446,7 +446,7 @@ async def check_discord_notifications(printer_id: str):
                 printer_id, name, webhook,
                 f"\U0001F5A8\uFE0F Printing \u2014 {current_bracket}%",
                 f"**{file_name}**\n`{bar}` {progress:.1f}%" if file_name else f"`{bar}` {progress:.1f}%",
-                0xe8793a,  # accent orange
+                0xff6a00,  # neon orange accent
                 fields=fields,
             )
 
