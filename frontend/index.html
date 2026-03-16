@@ -26,9 +26,10 @@
   --text-1: #b8b5af;
   --text-2: #807d77;
   --text-3: #555350;
-  --accent: #e8793a;
-  --accent-soft: #e8793a18;
-  --accent-med: #e8793a30;
+  --accent: #ff6a00;
+  --accent-glow: #ff6a0060;
+  --accent-soft: #ff6a0018;
+  --accent-med: #ff6a0030;
   --green: #4ade80;
   --green-soft: #4ade8015;
   --green-med: #4ade8030;
@@ -62,7 +63,8 @@ body {
 
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 10px; }
+::-webkit-scrollbar-thumb { background: var(--accent-med); border-radius: 10px; }
+::selection { background: var(--accent-med); color: var(--text-0); }
 .mono { font-family: var(--mono); }
 .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -88,7 +90,8 @@ body {
 }
 .brand-mark {
   width: 26px; height: 26px; border-radius: 6px;
-  background: linear-gradient(135deg, var(--accent), #d4612a);
+  background: linear-gradient(135deg, var(--accent), #e05500);
+  box-shadow: 0 0 12px var(--accent-glow);
   display: flex; align-items: center; justify-content: center;
   font-size: 13px; font-weight: 700; color: #000; flex-shrink: 0;
 }
@@ -102,7 +105,7 @@ body {
   cursor: pointer; transition: all var(--duration) var(--ease);
 }
 .topbar-nav button:hover { color: var(--text-1); background: var(--border-0); }
-.topbar-nav button.active { color: var(--text-0); background: var(--bg-3); }
+.topbar-nav button.active { color: var(--accent); background: var(--accent-soft); }
 .topbar-right { display: flex; align-items: center; gap: 14px; }
 .ws-indicator {
   display: flex; align-items: center; gap: 6px;
@@ -146,8 +149,8 @@ body {
   display: inline-flex; align-items: center; gap: 5px; line-height: 1;
 }
 .btn:hover { background: var(--bg-4); border-color: var(--border-3); color: var(--text-0); }
-.btn-accent { background: var(--accent); border-color: var(--accent); color: #000; font-weight: 600; }
-.btn-accent:hover { background: #d4682e; border-color: #d4682e; color: #000; }
+.btn-accent { background: var(--accent); border-color: var(--accent); color: #000; font-weight: 600; box-shadow: 0 0 10px var(--accent-glow); }
+.btn-accent:hover { background: #e05500; border-color: #e05500; color: #000; box-shadow: 0 0 16px var(--accent-glow); }
 .btn-ghost { background: transparent; border-color: transparent; color: var(--text-2); padding: 5px 8px; }
 .btn-ghost:hover { background: var(--border-0); color: var(--text-1); }
 .btn-danger { border-color: var(--red-med); color: var(--red); background: var(--red-soft); }
@@ -170,7 +173,8 @@ body {
   transition: background var(--duration) var(--ease);
 }
 .p-card:hover { border-color: var(--border-2); }
-.p-card.s-printing::before { background: var(--accent); }
+.p-card.s-printing::before { background: var(--accent); box-shadow: 0 0 8px var(--accent-glow); }
+.p-card.s-printing { border-color: var(--accent-med); }
 .p-card.s-idle::before, .p-card.s-ready::before, .p-card.s-finished::before { background: var(--green); }
 .p-card.s-paused::before { background: var(--yellow); }
 .p-card.s-error::before, .p-card.s-attention::before, .p-card.s-offline::before { background: var(--red); }
@@ -215,6 +219,7 @@ body {
 .progress-fill {
   height: 100%; background: var(--accent); border-radius: 2px;
   transition: width 1.5s var(--ease); position: relative;
+  box-shadow: 0 0 8px var(--accent-glow);
 }
 .progress-fill::after {
   content: ''; position: absolute; top: 0; right: 0; width: 40px; height: 100%;
@@ -260,7 +265,8 @@ body {
 }
 .cam-live-dot {
   position: absolute; top: 8px; right: 8px; width: 6px; height: 6px;
-  background: var(--red); border-radius: 50%; animation: blink 1.5s ease-in-out infinite;
+  background: var(--accent); border-radius: 50%; animation: blink 1.5s ease-in-out infinite;
+  box-shadow: 0 0 6px var(--accent-glow);
 }
 @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
 .cam-expand-icon {
@@ -331,7 +337,7 @@ body {
   font-family: var(--mono); font-size: 13px; color: var(--text-0); outline: none;
   transition: border-color var(--duration) var(--ease);
 }
-.field input:focus, .field select:focus { border-color: var(--accent); }
+.field input:focus, .field select:focus { border-color: var(--accent); box-shadow: 0 0 6px var(--accent-glow); }
 .field input::placeholder { color: var(--text-3); }
 .field .hint { font-size: 10.5px; color: var(--text-3); margin-top: 4px; line-height: 1.4; }
 .modal-error {
