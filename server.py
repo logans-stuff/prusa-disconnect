@@ -446,7 +446,7 @@ async def check_discord_notifications(printer_id: str):
                 printer_id, name, webhook,
                 f"\U0001F5A8\uFE0F Printing \u2014 {current_bracket}%",
                 f"**{file_name}**\n`{bar}` {progress:.1f}%" if file_name else f"`{bar}` {progress:.1f}%",
-                0xe8793a,  # accent orange
+                0xff6a00,  # neon orange accent
                 fields=fields,
             )
 
@@ -574,6 +574,19 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="PrusaDisconnect", version="0.2.0", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"],
                    allow_headers=["*"])
+
+@app.middleware("http")
+async def log_octoprint_requests(request: Request, call_next):
+    """Log all /api/ requests to help debug PrusaSlicer connectivity."""
+    if request.url.path.startswith("/api/"):
+        log.info("OctoPrint compat: %s %s (headers: %s)",
+                 request.method, request.url.path,
+                 {k: v for k, v in request.headers.items() if k.lower() in
+                  ("x-api-key", "authorization", "content-type", "user-agent")})
+    response = await call_next(request)
+    if request.url.path.startswith("/api/"):
+        log.info("OctoPrint compat: %s %s -> %d", request.method, request.url.path, response.status_code)
+    return response
 
 # ---------------------------------------------------------------------------
 # Models
@@ -1104,15 +1117,40 @@ async def printer_metrics_history(printer_id: str, days: int = Query(30)):
 # ---------------------------------------------------------------------------
 # PrusaSlicer compatibility (OctoPrint API)
 # ---------------------------------------------------------------------------
-@app.get("/api/version")
+@app.api_route("/api/version", methods=["GET", "HEAD", "OPTIONS"])
 async def octoprint_version():
     """OctoPrint-compatible version endpoint for PrusaSlicer."""
-    return {"api": "0.1", "server": "1.10.0", "text": "PrusaDisconnect 1.10.0"}
+    return {"api": "0.1", "server": "1.10.0", "text": "OctoPrint 1.10.0"}
 
 @app.post("/api/login")
 async def octoprint_login():
     """OctoPrint-compatible login endpoint for PrusaSlicer."""
     return {"name": "_api", "session": "prusa-disconnect", "active": True, "admin": True, "user": True}
+
+@app.get("/api/connection")
+async def octoprint_connection():
+    """OctoPrint-compatible connection status endpoint."""
+    return {
+        "current": {"state": "Operational", "port": "/dev/ttyUSB0", "baudrate": 250000,
+                     "printerProfile": "_default"},
+        "options": {"ports": ["/dev/ttyUSB0"], "baudrates": [250000],
+                    "printerProfiles": [{"id": "_default", "name": "Default"}]}
+    }
+
+@app.get("/api/settings")
+async def octoprint_settings():
+    """OctoPrint-compatible settings endpoint."""
+    return {"feature": {"sdSupport": False}, "webcam": {"streamUrl": "", "snapshotUrl": ""}}
+
+@app.get("/api/printer")
+async def octoprint_printer():
+    """OctoPrint-compatible printer state endpoint."""
+    return {
+        "state": {"text": "Operational", "flags": {"operational": True, "printing": False,
+                  "cancelling": False, "pausing": False, "error": False, "paused": False,
+                  "ready": True, "sdReady": False}},
+        "temperature": {}
+    }
 
 @app.post("/api/files/local")
 async def octoprint_upload(file: UploadFile = File(...),
@@ -1160,6 +1198,31 @@ async def octoprint_upload(file: UploadFile = File(...),
 
     conn.close()
     return result
+
+@app.get("/api/slicer-test")
+async def slicer_test():
+    """Diagnostic page: open in browser to verify OctoPrint compat endpoints."""
+    html = """<html><body style="font-family:monospace;padding:2em">
+    <h2>PrusaSlicer OctoPrint Compatibility Test</h2>
+    <pre id="out">Running tests...</pre>
+    <script>
+    async function test() {
+        const out = document.getElementById('out');
+        let log = '';
+        for (const ep of ['/api/version', '/api/connection', '/api/settings', '/api/printer']) {
+            try {
+                const r = await fetch(ep, {headers: {'X-Api-Key': 'test123'}});
+                const j = await r.json();
+                log += `✓ GET ${ep} → ${r.status}\\n  ${JSON.stringify(j)}\\n\\n`;
+            } catch(e) {
+                log += `✗ GET ${ep} → ${e.message}\\n\\n`;
+            }
+        }
+        out.textContent = log;
+    }
+    test();
+    </script></body></html>"""
+    return HTMLResponse(html)
 
 # ---------------------------------------------------------------------------
 # WebSocket: live telemetry
